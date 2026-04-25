@@ -299,7 +299,6 @@ tictactoi/
 │   ├── server.js                     #    🧠 Game logic + Socket.io server
 │   ├── package.json                  #    Backend dependencies
 │   └── dockerfile                    #    Backend container
-│
 ```
 
 ---
