@@ -351,19 +351,3 @@ The interface follows a **dark glassmorphism** design language:
 | ≤ 360px | Ultra-compact mobile view |
 
 ---
-
-## 🧪 Testing
-
-```bash
-# Run unit tests
-cd tictactoiFrontend/app
-npm run test
-
-# Lint check
-npm run lint
-
-# Auto-fix lint issues
-npm run lint:fix
-```
-
----
