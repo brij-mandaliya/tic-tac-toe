@@ -300,7 +300,6 @@ tictactoi/
 │   ├── package.json                  #    Backend dependencies
 │   └── dockerfile                    #    Backend container
 │
-└── ISSUE_FIX_REPORT.md              # 🐛 Documented bug fix report
 ```
 
 ---
