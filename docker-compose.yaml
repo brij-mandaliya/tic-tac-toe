@@ -1,0 +1,35 @@
+services:
+  frontend-web:
+    container_name: tictactoeFrontend
+    build:
+      context: ./tictactoiFrontend/app/
+      dockerfile: Dockerfile
+      args:
+        MODE: dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NUXT_PUBLIC_BASE_URL=http://localhost:3000
+      - PORT=3000
+      - HOST=0.0.0.0
+    networks:
+      - tictactoe-net
+    volumes:
+      - ./tictactoiFrontend/app/:/usr/src/app/
+
+  backend:
+    container_name: tictactoeBackend
+    build:
+      context: ./tictactoibackendnode/
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    networks:
+      - tictactoe-net
+    command: npm run dev  
+    volumes:
+      - ./tictactoibackendnode/server.js:/usr/src/app/server.js
+      - ./tictactoibackendnode/package.json:/usr/src/app/package.json
+
+networks:
+  tictactoe-net:
