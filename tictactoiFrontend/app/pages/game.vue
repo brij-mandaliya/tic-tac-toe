@@ -18,12 +18,39 @@ const gameWinner = ref('')
 const winningBlocks = ref(['', '', '', '', '', '', '', '', ''])
 const currentValidBlock = ref(-1)
 
+// Inactivity tracking state
+const turnStartTime = ref(null)
+const inactivityLimit = ref(180000) // default 3 minutes
+const elapsedTime = ref(0)
+const timeouts = ref({ X: 0, O: 0 })
+const inactivityWarningPlayer = ref('')
+let countdownInterval = null
+
 let gameUpdateHandler = null
 let errorHandler = null
 let symbolAssignedHandler = null
 let playerJoinedHandler = null
 let connectHandler = null
+let turnTimerStartHandler = null
+let inactivityWarningHandler = null
 const isInitialConnection = ref(true)
+
+// Start the countdown interval
+function startCountdownInterval() {
+  stopCountdownInterval()
+  countdownInterval = setInterval(() => {
+    if (turnStartTime.value) {
+      elapsedTime.value = Date.now() - turnStartTime.value
+    }
+  }, 1000)
+}
+
+function stopCountdownInterval() {
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+}
 
 // Emit move to server
 function makeMove(blockIndex, positionIndex) {
@@ -39,6 +66,9 @@ gameUpdateHandler = (gameData) => {
   if (gameData.winner) {
     console.log('Game winner detected:', gameData.winner)
     gameWinner.value = gameData.winner
+    stopCountdownInterval()
+    turnStartTime.value = null
+    elapsedTime.value = 0
   }
   
   if (gameData.board) {
@@ -57,6 +87,21 @@ gameUpdateHandler = (gameData) => {
     xPlayerName.value = gameData.playerNames.X || xPlayerName.value
     oPlayerName.value = gameData.playerNames.O || oPlayerName.value
   }
+
+  // Update timeouts from server
+  if (gameData.timeouts) {
+    timeouts.value = { ...gameData.timeouts }
+  }
+
+  // Update turn start time and inactivity limit
+  if (gameData.turnStartTime) {
+    turnStartTime.value = gameData.turnStartTime
+    elapsedTime.value = Date.now() - gameData.turnStartTime
+    startCountdownInterval()
+  }
+  if (gameData.inactivityLimit) {
+    inactivityLimit.value = gameData.inactivityLimit
+  }
   
   if (gameData.currentBlock !== undefined && gameData.currentBlock !== null) {
     console.log('Next valid block:', gameData.currentBlock)
@@ -72,6 +117,33 @@ gameUpdateHandler = (gameData) => {
     anotherPlayerJoin.value = true
     closeModal()
   }
+}
+
+// Handle turn timer start from server
+turnTimerStartHandler = (data) => {
+  console.log('Turn timer started:', data)
+  turnStartTime.value = data.turnStartTime
+  inactivityLimit.value = data.inactivityLimit
+  elapsedTime.value = 0
+  if (data.timeouts) {
+    timeouts.value = { ...data.timeouts }
+  }
+  startCountdownInterval()
+}
+
+// Handle inactivity warning from server
+inactivityWarningHandler = (data) => {
+  console.log('Inactivity warning:', data)
+  inactivityWarningPlayer.value = data.player
+  if (data.timeouts) {
+    timeouts.value = { ...data.timeouts }
+  }
+  // Show a toast notification for the warning
+  const playerName = data.player === 'X' ? xPlayerName.value : oPlayerName.value
+  useToastify(`⚠️ ${playerName || data.player} was inactive! Strike ${data.strikes}/${2}`, {
+    autoClose: 5000,
+    type: 'warning',
+  })
 }
 
 function exitGame() {
@@ -196,6 +268,8 @@ onMounted(() => {
   $socket.on('symbol_assigned', symbolAssignedHandler)
   $socket.on('player_joined', playerJoinedHandler)
   $socket.on('connect', connectHandler)
+  $socket.on('turn_timer_start', turnTimerStartHandler)
+  $socket.on('inactivity_warning', inactivityWarningHandler)
 
   // Mark initial connection as handled since we're doing it manually here
   isInitialConnection.value = false
@@ -214,6 +288,9 @@ onBeforeUnmount(() => {
   $socket.off('symbol_assigned', symbolAssignedHandler)
   $socket.off('player_joined', playerJoinedHandler)
   $socket.off('connect', connectHandler)
+  $socket.off('turn_timer_start', turnTimerStartHandler)
+  $socket.off('inactivity_warning', inactivityWarningHandler)
+  stopCountdownInterval()
 })
 
 watch(showShareModal, (newValue, oldValue) => {
@@ -334,6 +411,9 @@ function fallbackCopyTextToClipboard(text) {
         :winner="gameWinner"
         :winning-blocks="winningBlocks"
         :current-block="currentValidBlock"
+        :elapsed-time="elapsedTime"
+        :inactivity-limit="inactivityLimit"
+        :timeouts="timeouts"
         @make-move="makeMove"
         class="col"
       />

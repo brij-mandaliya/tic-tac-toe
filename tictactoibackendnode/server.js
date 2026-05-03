@@ -13,7 +13,7 @@ const io = new Server(httpServer, {
   },
 });
 
-const INACTIVITY_LIMIT = 60 * 1000; // 1 minute
+const INACTIVITY_LIMIT = 3 * 60 * 1000; // 3 minutes
 const MAX_TIMEOUTS = 2;
 
 const games = {}; // { roomId: { ...gameState } }
@@ -113,6 +113,9 @@ function buildGameUpdatePayload(gameId, game, extra = {}) {
     winner: game.winner,
     currentBlock: game.currentBlock,
     playerNames: getGamePlayerNames(game),
+    timeouts: game.timeouts,
+    turnStartTime: game.turnStartTime,
+    inactivityLimit: INACTIVITY_LIMIT,
     ...extra,
   };
 }
@@ -163,6 +166,17 @@ function startInactivityTimer(roomId, playerSymbol) {
   const game = games[roomId];
   clearTimeout(game.timeoutTimers[playerSymbol]);
 
+  // Record when this turn started for frontend countdown display
+  game.turnStartTime = Date.now();
+
+  // Notify all clients that a new turn timer has started
+  io.to(roomId).emit('turn_timer_start', {
+    player: playerSymbol,
+    turnStartTime: game.turnStartTime,
+    inactivityLimit: INACTIVITY_LIMIT,
+    timeouts: game.timeouts,
+  });
+
   game.timeoutTimers[playerSymbol] = setTimeout(() => {
     game.timeouts[playerSymbol] += 1;
 
@@ -170,16 +184,11 @@ function startInactivityTimer(roomId, playerSymbol) {
       const winner = playerSymbol === 'X' ? 'O' : 'X';
       game.winner = winner;
 
-      io.to(roomId).emit('game_update', {
-        gameId: roomId,
-        board: game.board,
-        winningBlocks: game.winningBlocks,
+      io.to(roomId).emit('game_update', buildGameUpdatePayload(roomId, game, {
         turn: null,
         winner: winner,
-        currentBlock: game.currentBlock,
-        playerNames: getGamePlayerNames(game),
         reason: 'timeout',
-      });
+      }));
 
       // Clean up
       clearTimeout(game.timeoutTimers.X);
@@ -188,7 +197,11 @@ function startInactivityTimer(roomId, playerSymbol) {
       io.to(roomId).emit('inactivity_warning', {
         player: playerSymbol,
         strikes: game.timeouts[playerSymbol],
+        timeouts: game.timeouts,
       });
+
+      // Restart the timer for another round
+      startInactivityTimer(roomId, playerSymbol);
     }
   }, INACTIVITY_LIMIT);
 }
@@ -215,7 +228,8 @@ io.on('connection', (socket) => {
         X: null,
         O: null,
       },
-      currentBlock: null
+      currentBlock: null,
+      turnStartTime: null,
     };
     playerSessions[playerId] = { gameId, socketId: socket.id, playerName: name, oldSocketId: socket.id }
     socket.join(gameId)

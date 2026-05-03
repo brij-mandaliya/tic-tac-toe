@@ -12,6 +12,9 @@ const props = defineProps({
   winner: String,
   winningBlocks: Array,
   currentBlock: Number,
+  elapsedTime: Number,
+  inactivityLimit: Number,
+  timeouts: Object,
 })
 
 const emit = defineEmits(['make-move'])
@@ -80,6 +83,36 @@ const currentPlayerName = computed(() => {
   }
   return props.currentPlayer
 })
+
+// Inactivity timer computed properties
+const remainingTimeMs = computed(() => {
+  const remaining = (props.inactivityLimit || 180000) - (props.elapsedTime || 0)
+  return Math.max(0, remaining)
+})
+
+const formattedRemainingTime = computed(() => {
+  const totalSeconds = Math.floor(remainingTimeMs.value / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+})
+
+const timerProgressPercent = computed(() => {
+  const limit = props.inactivityLimit || 180000
+  const elapsed = props.elapsedTime || 0
+  return Math.min(100, (elapsed / limit) * 100)
+})
+
+const timerUrgency = computed(() => {
+  const percent = timerProgressPercent.value
+  if (percent >= 80) return 'critical'
+  if (percent >= 50) return 'warning'
+  return 'safe'
+})
+
+const xTimeouts = computed(() => props.timeouts?.X || 0)
+const oTimeouts = computed(() => props.timeouts?.O || 0)
+const maxTimeouts = 2
 </script>
 
 <template>
@@ -96,13 +129,62 @@ const currentPlayerName = computed(() => {
 
   <!-- Game Layout: Left Panel | Board | Right Panel -->
   <div v-else class="game-layout">
-    <!-- LEFT PANEL: Turn + Scores -->
+    <!-- LEFT PANEL: Turn + Scores + Timer -->
     <div class="side-panel left-panel text-light">
       <div class="panel-card">
         <h6 class="panel-heading">Current Turn</h6>
         <div class="turn-display">
           <span v-if="props.currentPlayer === props.playerSymbol" class="turn-name">{{ currentPlayerName }}</span>
           <span v-else class="turn-waiting">Waiting...</span>
+        </div>
+      </div>
+
+      <!-- Inactivity Timer Card -->
+      <div v-if="props.elapsedTime !== null && props.elapsedTime !== undefined" class="panel-card timer-card">
+        <h6 class="panel-heading">
+          <span class="timer-icon">⏱</span> Turn Timer
+        </h6>
+        <div class="timer-display" :class="`timer-${timerUrgency}`">
+          <span class="timer-value">{{ formattedRemainingTime }}</span>
+          <span class="timer-label">remaining</span>
+        </div>
+        <div class="timer-progress-bar">
+          <div 
+            class="timer-progress-fill" 
+            :class="`fill-${timerUrgency}`"
+            :style="{ width: `${100 - timerProgressPercent}%` }"
+          />
+        </div>
+      </div>
+
+      <!-- Timeout Strikes Card -->
+      <div class="panel-card strikes-card">
+        <h6 class="panel-heading">
+          <span class="strikes-icon">⚡</span> Inactivity Strikes
+        </h6>
+        <div class="strike-row">
+          <span class="strike-player-name">{{ xDisplayName }}</span>
+          <div class="strike-dots">
+            <span 
+              v-for="s in maxTimeouts" 
+              :key="'x-' + s" 
+              class="strike-dot" 
+              :class="{ 'strike-active': s <= xTimeouts }"
+            />
+          </div>
+          <span class="strike-count">{{ xTimeouts }}/{{ maxTimeouts }}</span>
+        </div>
+        <div class="strike-row">
+          <span class="strike-player-name">{{ oDisplayName }}</span>
+          <div class="strike-dots">
+            <span 
+              v-for="s in maxTimeouts" 
+              :key="'o-' + s" 
+              class="strike-dot" 
+              :class="{ 'strike-active': s <= oTimeouts }"
+            />
+          </div>
+          <span class="strike-count">{{ oTimeouts }}/{{ maxTimeouts }}</span>
         </div>
       </div>
 
@@ -632,5 +714,171 @@ const currentPlayerName = computed(() => {
   .panel-card {
     padding: 0.5rem;
   }
+}
+
+/* ===== Inactivity Timer Styles ===== */
+.timer-card {
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.timer-display {
+  text-align: center;
+  padding: 0.5rem 0 0.25rem;
+  transition: all 0.3s ease;
+}
+
+.timer-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  display: block;
+  line-height: 1;
+}
+
+.timer-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.4);
+  display: block;
+  margin-top: 0.25rem;
+}
+
+/* Timer urgency color states */
+.timer-safe .timer-value {
+  color: #4ade80;
+  text-shadow: 0 0 15px rgba(74, 222, 128, 0.4);
+}
+
+.timer-warning .timer-value {
+  color: #fbbf24;
+  text-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
+  animation: pulse-warning 1.5s ease-in-out infinite;
+}
+
+.timer-critical .timer-value {
+  color: #ef4444;
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.7);
+  animation: pulse-critical 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes pulse-critical {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+}
+
+/* Timer progress bar */
+.timer-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.timer-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s linear;
+}
+
+.fill-safe {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+.fill-warning {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
+}
+
+.fill-critical {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  animation: bar-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes bar-glow {
+  from { box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+  to { box-shadow: 0 0 12px rgba(239, 68, 68, 0.8); }
+}
+
+/* ===== Strikes Styles ===== */
+.strikes-card {
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.strikes-icon,
+.timer-icon {
+  margin-right: 0.25rem;
+}
+
+.strike-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.3rem;
+  border-radius: 6px;
+  transition: background 0.3s ease;
+}
+
+.strike-row + .strike-row {
+  margin-top: 0.3rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 0.5rem;
+}
+
+.strike-player-name {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70px;
+  flex-shrink: 1;
+}
+
+.strike-dots {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.strike-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.strike-dot.strike-active {
+  background: #ef4444;
+  border-color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  animation: strike-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes strike-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.8); }
+}
+
+.strike-count {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  min-width: 25px;
+  text-align: right;
+  flex-shrink: 0;
 }
 </style>
