@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: tictactoe-backend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: tictactoibackendnode
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /datas
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+
+  - type: web
+    name: tictactoe-frontend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: tictactoiFrontend/app
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: NUXT_PUBLIC_BASE_URL
+        value: https://tictactoe-frontend.onrender.com
+      - key: NUXT_PUBLIC_SOCKET_URL
+        fromService:
+          type: web
+          name: tictactoe-backend
+          property: hostport

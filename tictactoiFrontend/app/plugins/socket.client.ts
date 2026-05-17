@@ -1,7 +1,8 @@
 import { io } from 'socket.io-client'
 
 export default defineNuxtPlugin(() => {
-  const socketUrl = `${window.location.protocol}//${window.location.hostname}:4000`
+  const config = useRuntimeConfig()
+  const socketUrl = config.public.socketUrl || `${window.location.protocol}//${window.location.hostname}:4000`
   const socket = io(socketUrl, {
     transports: ['websocket', 'polling'],
     reconnection: true,

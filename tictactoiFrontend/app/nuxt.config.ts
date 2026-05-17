@@ -16,6 +16,7 @@ export default defineNuxtConfig({
     public: {
       apiBase: '/api',
       base_url: process.env.NUXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+      socketUrl: process.env.NUXT_PUBLIC_SOCKET_URL || '',
     },
   },
   css: [
